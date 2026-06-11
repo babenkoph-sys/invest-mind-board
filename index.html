@@ -47,6 +47,7 @@
     header .links { margin-left: auto; }
     header .links a { color: var(--muted); text-decoration: none; font-size: 14px; margin-left: 18px; }
     header .links a:hover { color: var(--text); }
+    #syncStatus { font-size: 12px; color: var(--green); margin-left: 10px; }
 
     main { padding: 28px 32px 64px; max-width: 1400px; margin: 0 auto; }
 
@@ -219,6 +220,8 @@
       <a href="https://t.me/INVESTMIND_pro" target="_blank" rel="noopener">Telegram-канал</a>
       <a href="#" onclick="exportData(); return false;">⬇ Экспорт данных</a>
       <a href="#" onclick="document.getElementById('importFile').click(); return false;">⬆ Импорт данных</a>
+      <a href="#" onclick="setupSync(); return false;">⚙️ Синхронизация</a>
+      <span id="syncStatus"></span>
       <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
     </nav>
   </header>
@@ -262,7 +265,7 @@
       { title: 'Агентный ИИ (AaaS): почему SaaS-модель под угрозой', stage: 1, platforms: [] },
     ];
 
-    function save() { localStorage.setItem(LS_ITEMS, JSON.stringify(items)); }
+    function save() { localStorage.setItem(LS_ITEMS, JSON.stringify(items)); scheduleSync(); }
 
     function render() {
       const board = document.getElementById('board');
@@ -344,6 +347,7 @@
       if (last && last.date === entry.date) history[history.length - 1] = entry;
       else history.push(entry);
       localStorage.setItem(LS_METRICS, JSON.stringify(history));
+      scheduleSync();
       drawChart();
     }
 
@@ -411,8 +415,126 @@
       reader.readAsText(file);
     }
 
+    /* ОБЛАЧНАЯ СИНХРОНИЗАЦИЯ — приватный GitHub Gist как хранилище.
+       Токен и id хранилища живут только в браузере устройства. */
+    const LS_TOKEN = 'im_gh_token', LS_GIST = 'im_gist_id', LS_UPDATED = 'im_updated';
+    const GIST_FILE = 'invest-mind-data.json';
+    let syncTimer = null;
+
+    function syncStatus(msg) { document.getElementById('syncStatus').textContent = msg; }
+
+    function ghHeaders() {
+      return {
+        'Authorization': 'Bearer ' + localStorage.getItem(LS_TOKEN),
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      };
+    }
+
+    async function setupSync() {
+      if (localStorage.getItem(LS_TOKEN)) {
+        if (confirm('Синхронизация подключена на этом устройстве. Отключить?')) {
+          localStorage.removeItem(LS_TOKEN);
+          localStorage.removeItem(LS_GIST);
+          syncStatus('');
+        }
+        return;
+      }
+      const t = prompt(
+        'Вставьте GitHub-токен для синхронизации.\n\n' +
+        'Где взять (один раз): github.com/settings/tokens → ' +
+        '«Generate new token (classic)» → отметить только галочку «gist» → Generate → скопировать.'
+      );
+      if (!t) return;
+      localStorage.setItem(LS_TOKEN, t.trim());
+      syncStatus('подключение…');
+      try {
+        await pullData(true);
+        syncStatus('✓ синхронизировано');
+      } catch (e) {
+        localStorage.removeItem(LS_TOKEN);
+        localStorage.removeItem(LS_GIST);
+        syncStatus('');
+        alert('Не получилось подключиться: проверьте токен и галочку «gist».');
+      }
+    }
+
+    async function findOrCreateGist() {
+      let id = localStorage.getItem(LS_GIST);
+      if (id) return id;
+      const res = await fetch('https://api.github.com/gists?per_page=100', { headers: ghHeaders() });
+      if (!res.ok) throw new Error('токен не принят');
+      const list = await res.json();
+      const found = list.find(g => g.files && g.files[GIST_FILE]);
+      if (found) {
+        id = found.id;
+      } else {
+        const created = await fetch('https://api.github.com/gists', {
+          method: 'POST', headers: ghHeaders(),
+          body: JSON.stringify({
+            description: 'INVEST MIND — данные дашборда',
+            public: false,
+            files: { [GIST_FILE]: { content: JSON.stringify({ items, history, updatedAt: Date.now() }) } }
+          })
+        });
+        if (!created.ok) throw new Error('не удалось создать хранилище');
+        id = (await created.json()).id;
+      }
+      localStorage.setItem(LS_GIST, id);
+      return id;
+    }
+
+    async function pullData(force) {
+      if (!localStorage.getItem(LS_TOKEN)) return;
+      const id = await findOrCreateGist();
+      const res = await fetch('https://api.github.com/gists/' + id, { headers: ghHeaders() });
+      if (!res.ok) throw new Error('ошибка чтения');
+      const g = await res.json();
+      let remote = {};
+      try { remote = JSON.parse(g.files[GIST_FILE].content); } catch {}
+      const localUpd = +(localStorage.getItem(LS_UPDATED) || 0);
+      if ((remote.updatedAt || 0) > localUpd) {
+        items = remote.items || items;
+        history = remote.history || history;
+        localStorage.setItem(LS_ITEMS, JSON.stringify(items));
+        localStorage.setItem(LS_METRICS, JSON.stringify(history));
+        localStorage.setItem(LS_UPDATED, String(remote.updatedAt));
+        render(); drawChart();
+      } else if (localUpd > (remote.updatedAt || 0) || force) {
+        await pushData();
+      }
+      syncStatus('✓ синхронизировано');
+    }
+
+    async function pushData() {
+      const id = await findOrCreateGist();
+      const updatedAt = +(localStorage.getItem(LS_UPDATED) || Date.now());
+      const res = await fetch('https://api.github.com/gists/' + id, {
+        method: 'PATCH', headers: ghHeaders(),
+        body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify({ items, history, updatedAt }) } } })
+      });
+      if (!res.ok) throw new Error('ошибка записи');
+    }
+
+    function scheduleSync() {
+      if (!localStorage.getItem(LS_TOKEN)) return;
+      localStorage.setItem(LS_UPDATED, String(Date.now()));
+      syncStatus('…');
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(() => {
+        pushData()
+          .then(() => syncStatus('✓ синхронизировано'))
+          .catch(() => syncStatus('⚠ нет связи'));
+      }, 1500);
+    }
+
     render();
     drawChart();
+    if (localStorage.getItem(LS_TOKEN)) {
+      syncStatus('…');
+      pullData().catch(() => syncStatus('⚠ нет связи'));
+      setInterval(() => pullData().catch(() => {}), 60000);
+    }
     if (history.length) {
       const last = history[history.length - 1];
       document.getElementById('m_tg').value = last.tg || '';
