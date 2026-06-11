@@ -110,7 +110,7 @@
       color: #fff;
     }
 
-    .item .controls { margin-top: 10px; display: flex; gap: 6px; }
+    .item .controls { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
 
     .item .controls button {
       background: rgba(229,231,235,0.06);
@@ -155,6 +155,8 @@
 
     .btn:hover { transform: translateY(-1px); }
     .btn:active { transform: scale(0.97); }
+    .btn.small { padding: 8px 16px; font-size: 13px; }
+    .btn.ghost { background: rgba(229,231,235,0.1); }
 
     /* МЕТРИКИ */
     .metrics {
@@ -205,6 +207,45 @@
 
     .empty { color: rgba(229,231,235,0.35); font-size: 14px; padding: 8px 6px; }
 
+    /* МАТЕРИАЛЫ */
+    .materials { display: grid; gap: 12px; }
+
+    /* ПРОСМОТР ТЕКСТА */
+    .viewer {
+      position: fixed; inset: 0; z-index: 50;
+      background: rgba(2, 6, 23, 0.85);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+
+    .viewer-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      max-width: 760px; width: 100%;
+      max-height: 85vh;
+      display: flex; flex-direction: column;
+    }
+
+    .viewer-head {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(229,231,235,0.08);
+      font-weight: 600; font-size: 15px;
+    }
+
+    .viewer-head span { margin-right: auto; }
+
+    .viewer pre {
+      margin: 0; padding: 20px;
+      overflow: auto;
+      white-space: pre-wrap;
+      font-family: inherit;
+      font-size: 14.5px;
+      line-height: 1.6;
+      color: var(--text);
+    }
+
     @media (max-width: 900px) {
       .metrics { grid-template-columns: 1fr; }
       main, header { padding-left: 18px; padding-right: 18px; }
@@ -236,6 +277,9 @@
 
     <div class="board" id="board"></div>
 
+    <h2>Материалы фабрики <span class="hint">готовые отчёты и тексты постов из закрытого репозитория; «копировать» — и сразу в соцсеть</span></h2>
+    <div id="materials" class="materials"><div class="empty">Подключите синхронизацию (⚙️ справа вверху), чтобы видеть материалы.</div></div>
+
     <h2>Подписчики по платформам <span class="hint">вносите цифры раз в неделю — график покажет динамику</span></h2>
 
     <div class="metrics">
@@ -252,6 +296,17 @@
       </div>
     </div>
   </main>
+
+  <div id="viewer" class="viewer" style="display:none" onclick="if(event.target===this) closeViewer()">
+    <div class="viewer-box">
+      <div class="viewer-head">
+        <span id="viewerTitle"></span>
+        <button class="btn small" onclick="copyViewer()">Скопировать текст</button>
+        <button class="btn small ghost" onclick="closeViewer()">Закрыть</button>
+      </div>
+      <pre id="viewerText"></pre>
+    </div>
+  </div>
 
   <script>
     const STAGES = ['Идеи', 'Анализ', 'Черновик', 'Опубликовано'];
@@ -379,7 +434,7 @@
       else chart = new Chart(document.getElementById('chart'), { type: 'line', data, options: opts });
     }
 
-    /* ЭКСПОРТ / ИМПОРТ — перенос данных между устройствами */
+    /* ЭКСПОРТ / ИМПОРТ — резервная копия и перенос данных */
     function exportData() {
       const blob = new Blob(
         [JSON.stringify({ items, history }, null, 2)],
@@ -415,11 +470,12 @@
       reader.readAsText(file);
     }
 
-    /* ОБЛАЧНАЯ СИНХРОНИЗАЦИЯ — приватный GitHub Gist как хранилище.
-       Токен и id хранилища живут только в браузере устройства. */
-    const LS_TOKEN = 'im_gh_token', LS_GIST = 'im_gist_id', LS_UPDATED = 'im_updated';
-    const GIST_FILE = 'invest-mind-data.json';
-    let syncTimer = null;
+    /* ОБЛАЧНАЯ СИНХРОНИЗАЦИЯ И МАТЕРИАЛЫ — закрытый репозиторий GitHub.
+       Ключ доступа хранится только в браузере устройства. */
+    const LS_TOKEN = 'im_repo_token', LS_UPDATED = 'im_updated';
+    const REPO = 'babenkoph-sys/my-vibe-site';
+    const DATA_PATH = 'invest-mind-data.json';
+    let syncTimer = null, dataSha = null;
 
     function syncStatus(msg) { document.getElementById('syncStatus').textContent = msg; }
 
@@ -431,89 +487,84 @@
       };
     }
 
+    async function ghGet(path) {
+      const res = await fetch('https://api.github.com/repos/' + REPO + '/contents/' + path, { headers: ghHeaders() });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error('GitHub: ' + res.status);
+      return res.json();
+    }
+
+    function b64encode(str) { return btoa(unescape(encodeURIComponent(str))); }
+    function b64decode(b) { return decodeURIComponent(escape(atob(String(b).replace(/\n/g, '')))); }
+
     async function setupSync() {
       if (localStorage.getItem(LS_TOKEN)) {
         if (confirm('Синхронизация подключена на этом устройстве. Отключить?')) {
           localStorage.removeItem(LS_TOKEN);
-          localStorage.removeItem(LS_GIST);
+          dataSha = null;
           syncStatus('');
         }
         return;
       }
       const t = prompt(
-        'Вставьте GitHub-токен для синхронизации.\n\n' +
-        'Где взять (один раз): github.com/settings/tokens → ' +
-        '«Generate new token (classic)» → отметить только галочку «gist» → Generate → скопировать.'
+        'Вставьте ключ доступа GitHub (fine-grained, только репозиторий my-vibe-site, право Contents: Read and write).\n\n' +
+        'Где взять: github.com/settings/personal-access-tokens → Generate new token.'
       );
       if (!t) return;
       localStorage.setItem(LS_TOKEN, t.trim());
       syncStatus('подключение…');
       try {
         await pullData(true);
+        await loadMaterials();
         syncStatus('✓ синхронизировано');
       } catch (e) {
         localStorage.removeItem(LS_TOKEN);
-        localStorage.removeItem(LS_GIST);
         syncStatus('');
-        alert('Не получилось подключиться: проверьте токен и галочку «gist».');
+        alert('Не получилось подключиться: проверьте ключ и его права (Contents: Read and write для my-vibe-site).');
       }
-    }
-
-    async function findOrCreateGist() {
-      let id = localStorage.getItem(LS_GIST);
-      if (id) return id;
-      const res = await fetch('https://api.github.com/gists?per_page=100', { headers: ghHeaders() });
-      if (!res.ok) throw new Error('токен не принят');
-      const list = await res.json();
-      const found = list.find(g => g.files && g.files[GIST_FILE]);
-      if (found) {
-        id = found.id;
-      } else {
-        const created = await fetch('https://api.github.com/gists', {
-          method: 'POST', headers: ghHeaders(),
-          body: JSON.stringify({
-            description: 'INVEST MIND — данные дашборда',
-            public: false,
-            files: { [GIST_FILE]: { content: JSON.stringify({ items, history, updatedAt: Date.now() }) } }
-          })
-        });
-        if (!created.ok) throw new Error('не удалось создать хранилище');
-        id = (await created.json()).id;
-      }
-      localStorage.setItem(LS_GIST, id);
-      return id;
     }
 
     async function pullData(force) {
       if (!localStorage.getItem(LS_TOKEN)) return;
-      const id = await findOrCreateGist();
-      const res = await fetch('https://api.github.com/gists/' + id, { headers: ghHeaders() });
-      if (!res.ok) throw new Error('ошибка чтения');
-      const g = await res.json();
-      let remote = {};
-      try { remote = JSON.parse(g.files[GIST_FILE].content); } catch {}
+      const f = await ghGet(DATA_PATH);
       const localUpd = +(localStorage.getItem(LS_UPDATED) || 0);
-      if ((remote.updatedAt || 0) > localUpd) {
-        items = remote.items || items;
-        history = remote.history || history;
-        localStorage.setItem(LS_ITEMS, JSON.stringify(items));
-        localStorage.setItem(LS_METRICS, JSON.stringify(history));
-        localStorage.setItem(LS_UPDATED, String(remote.updatedAt));
-        render(); drawChart();
-      } else if (localUpd > (remote.updatedAt || 0) || force) {
+      if (f) {
+        dataSha = f.sha;
+        let remote = {};
+        try { remote = JSON.parse(b64decode(f.content)); } catch {}
+        if ((remote.updatedAt || 0) > localUpd) {
+          items = remote.items || items;
+          history = remote.history || history;
+          localStorage.setItem(LS_ITEMS, JSON.stringify(items));
+          localStorage.setItem(LS_METRICS, JSON.stringify(history));
+          localStorage.setItem(LS_UPDATED, String(remote.updatedAt));
+          render(); drawChart();
+        } else if (localUpd > (remote.updatedAt || 0)) {
+          await pushData();
+        }
+      } else if (force) {
         await pushData();
       }
       syncStatus('✓ синхронизировано');
     }
 
-    async function pushData() {
-      const id = await findOrCreateGist();
+    async function pushData(retry) {
       const updatedAt = +(localStorage.getItem(LS_UPDATED) || Date.now());
-      const res = await fetch('https://api.github.com/gists/' + id, {
-        method: 'PATCH', headers: ghHeaders(),
-        body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify({ items, history, updatedAt }) } } })
+      const body = {
+        message: 'Дашборд: обновление данных',
+        content: b64encode(JSON.stringify({ items, history, updatedAt }))
+      };
+      if (dataSha) body.sha = dataSha;
+      const res = await fetch('https://api.github.com/repos/' + REPO + '/contents/' + DATA_PATH, {
+        method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body)
       });
+      if ((res.status === 409 || res.status === 422) && !retry) {
+        const f = await ghGet(DATA_PATH);
+        dataSha = f ? f.sha : null;
+        return pushData(true);
+      }
       if (!res.ok) throw new Error('ошибка записи');
+      dataSha = (await res.json()).content.sha;
     }
 
     function scheduleSync() {
@@ -528,11 +579,82 @@
       }, 1500);
     }
 
+    /* МАТЕРИАЛЫ: отчёты и посты из репозитория */
+    const PLATFORM_FILES = [
+      ['Telegram', 'telegram.md'],
+      ['LinkedIn', 'linkedin.md'],
+      ['Instagram', 'instagram.md'],
+      ['YouTube', 'youtube.md'],
+    ];
+
+    async function loadMaterials() {
+      if (!localStorage.getItem(LS_TOKEN)) return;
+      const box = document.getElementById('materials');
+      const dirs = await ghGet('posts');
+      if (!dirs || !dirs.filter(x => x.type === 'dir').length) {
+        box.innerHTML = '<div class="empty">Пока нет готовых материалов — запустите конвейер кнопкой 🚀.</div>';
+        return;
+      }
+      box.innerHTML = '';
+      dirs.filter(x => x.type === 'dir').forEach(d => {
+        const el = document.createElement('div');
+        el.className = 'item';
+        el.innerHTML = '<div class="title">' + esc(d.name) + '</div><div class="controls mat"></div>';
+        const c = el.querySelector('.mat');
+        const rep = document.createElement('button');
+        rep.textContent = '📊 Отчёт';
+        rep.onclick = () => openReport(d.name);
+        c.appendChild(rep);
+        PLATFORM_FILES.forEach(([label, file]) => {
+          const b = document.createElement('button');
+          b.textContent = label;
+          b.onclick = () => openPost(d.name, file, label);
+          c.appendChild(b);
+        });
+        box.appendChild(el);
+      });
+    }
+
+    async function openPost(slug, file, label) {
+      syncStatus('…');
+      try {
+        const f = await ghGet('posts/' + slug + '/' + file);
+        syncStatus('✓ синхронизировано');
+        if (!f) { alert('Файл для этой платформы не найден.'); return; }
+        document.getElementById('viewerTitle').textContent = slug + ' — ' + label;
+        document.getElementById('viewerText').textContent = b64decode(f.content);
+        document.getElementById('viewer').style.display = 'flex';
+      } catch { syncStatus('⚠ нет связи'); }
+    }
+
+    async function openReport(slug) {
+      syncStatus('…');
+      try {
+        const f = await ghGet('reports/' + slug + '.html');
+        syncStatus('✓ синхронизировано');
+        if (!f) { alert('Отчёт не найден.'); return; }
+        const blob = new Blob([b64decode(f.content)], { type: 'text/html' });
+        window.open(URL.createObjectURL(blob), '_blank');
+      } catch { syncStatus('⚠ нет связи'); }
+    }
+
+    function copyViewer() {
+      const t = document.getElementById('viewerText').textContent.replace(/\*\*/g, '');
+      navigator.clipboard.writeText(t).then(
+        () => alert('Скопировано — можно вставлять в соцсеть.'),
+        () => alert('Не удалось скопировать автоматически — выделите текст вручную.')
+      );
+    }
+
+    function closeViewer() { document.getElementById('viewer').style.display = 'none'; }
+
+    /* СТАРТ */
     render();
     drawChart();
     if (localStorage.getItem(LS_TOKEN)) {
       syncStatus('…');
       pullData().catch(() => syncStatus('⚠ нет связи'));
+      loadMaterials().catch(() => {});
       setInterval(() => pullData().catch(() => {}), 60000);
     }
     if (history.length) {
