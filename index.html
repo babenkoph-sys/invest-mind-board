@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>INVEST MIND — Центр управления личным брендом</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+
+  <style>
+    :root {
+      --bg: #020617;
+      --card: #111827;
+      --panel: #0b1220;
+      --text: #e5e7eb;
+      --muted: rgba(229, 231, 235, 0.6);
+      --accent1: #6366f1;
+      --accent2: #8b5cf6;
+      --green: #34d399;
+      --border: rgba(99, 102, 241, 0.18);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+
+    header {
+      padding: 36px 32px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+    header .sub { color: var(--accent2); font-size: 13px; letter-spacing: 3px; text-transform: uppercase; font-weight: 600; }
+    header .links { margin-left: auto; }
+    header .links a { color: var(--muted); text-decoration: none; font-size: 14px; margin-left: 18px; }
+    header .links a:hover { color: var(--text); }
+
+    main { padding: 28px 32px 64px; max-width: 1400px; margin: 0 auto; }
+
+    h2 { font-size: 18px; font-weight: 600; margin: 36px 0 16px; }
+    h2 .hint { font-weight: 400; font-size: 13px; color: var(--muted); margin-left: 10px; }
+
+    /* КОНВЕЙЕР */
+    .board {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+    }
+
+    .column {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      min-height: 180px;
+    }
+
+    .column h3 {
+      margin: 4px 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .column h3 .count { color: var(--accent2); }
+
+    .item {
+      background: var(--card);
+      border: 1px solid rgba(229,231,235,0.07);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+    }
+
+    .item .title { font-size: 14px; line-height: 1.45; }
+
+    .badges { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .badge {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(229,231,235,0.2);
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .badge.on {
+      background: linear-gradient(135deg, var(--accent1), var(--accent2));
+      border-color: transparent;
+      color: #fff;
+    }
+
+    .item .controls { margin-top: 10px; display: flex; gap: 6px; }
+
+    .item .controls button {
+      background: rgba(229,231,235,0.06);
+      border: none;
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .item .controls button:hover { color: var(--text); background: rgba(229,231,235,0.12); }
+    .item .controls .del { margin-left: auto; }
+
+    .adder { display: flex; gap: 10px; margin-bottom: 18px; }
+
+    .adder input {
+      flex: 1;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      padding: 12px 16px;
+      font-size: 15px;
+      font-family: inherit;
+    }
+
+    .adder input::placeholder { color: rgba(229,231,235,0.35); }
+
+    .btn {
+      background: linear-gradient(135deg, var(--accent1), var(--accent2));
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: scale(0.97); }
+
+    /* МЕТРИКИ */
+    .metrics {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .metric-form {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .metric-form label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .metric-form input {
+      width: 120px;
+      background: var(--card);
+      border: 1px solid rgba(229,231,235,0.1);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: 14px;
+      font-family: inherit;
+      text-align: right;
+    }
+
+    .metric-form .btn { width: 100%; margin-top: 8px; }
+
+    .chart-wrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      min-height: 320px;
+    }
+
+    .empty { color: rgba(229,231,235,0.35); font-size: 14px; padding: 8px 6px; }
+
+    @media (max-width: 900px) {
+      .metrics { grid-template-columns: 1fr; }
+      main, header { padding-left: 18px; padding-right: 18px; }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <span class="sub">Invest Mind</span>
+    <h1>Центр управления личным брендом</h1>
+    <nav class="links">
+      <a href="https://t.me/INVESTMIND_pro" target="_blank" rel="noopener">Telegram-канал</a>
+      <a href="#" onclick="exportData(); return false;">⬇ Экспорт данных</a>
+      <a href="#" onclick="document.getElementById('importFile').click(); return false;">⬆ Импорт данных</a>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
+    </nav>
+  </header>
+
+  <main>
+    <h2>Контент-конвейер <span class="hint">добавьте тему → нажмите 🚀 — откроется Claude с готовым заданием; этапы двигайте ← →, платформы отмечайте кликом</span></h2>
+
+    <div class="adder">
+      <input id="newTopic" placeholder="Новая тема: например, «IPO Anthropic: что значит для частного инвестора»" onkeydown="if(event.key==='Enter') addItem()">
+      <button class="btn" onclick="addItem()">Добавить тему</button>
+    </div>
+
+    <div class="board" id="board"></div>
+
+    <h2>Подписчики по платформам <span class="hint">вносите цифры раз в неделю — график покажет динамику</span></h2>
+
+    <div class="metrics">
+      <div class="metric-form">
+        <label>Telegram <input type="number" id="m_tg" min="0" placeholder="0"></label>
+        <label>LinkedIn <input type="number" id="m_li" min="0" placeholder="0"></label>
+        <label>Instagram <input type="number" id="m_ig" min="0" placeholder="0"></label>
+        <label>YouTube <input type="number" id="m_yt" min="0" placeholder="0"></label>
+        <button class="btn" onclick="saveMetrics()">Сохранить замер за сегодня</button>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chart"></canvas>
+        <div class="empty" id="chartEmpty">Пока нет данных — внесите первый замер слева.</div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const STAGES = ['Идеи', 'Анализ', 'Черновик', 'Опубликовано'];
+    const PLATFORMS = ['TG', 'LI', 'IG', 'YT'];
+    const LS_ITEMS = 'im_pipeline';
+    const LS_METRICS = 'im_metrics';
+
+    let items = JSON.parse(localStorage.getItem(LS_ITEMS) || 'null') || [
+      { title: 'Vibe Coding: опыт инвестора, собравшего сайт без разработчиков', stage: 3, platforms: ['TG'] },
+      { title: 'Раунд Anthropic Series H: разбор cap table и мультипликаторов', stage: 3, platforms: ['TG'] },
+      { title: 'Агентный ИИ (AaaS): почему SaaS-модель под угрозой', stage: 1, platforms: [] },
+    ];
+
+    function save() { localStorage.setItem(LS_ITEMS, JSON.stringify(items)); }
+
+    function render() {
+      const board = document.getElementById('board');
+      board.innerHTML = '';
+      STAGES.forEach((stage, s) => {
+        const col = document.createElement('div');
+        col.className = 'column';
+        const inStage = items.map((it, i) => ({ it, i })).filter(x => x.it.stage === s);
+        col.innerHTML = `<h3>${stage} <span class="count">${inStage.length}</span></h3>`;
+        if (!inStage.length) col.innerHTML += '<div class="empty">Пусто</div>';
+        inStage.forEach(({ it, i }) => {
+          const el = document.createElement('div');
+          el.className = 'item';
+          el.innerHTML = `
+            <div class="title">${esc(it.title)}</div>
+            <div class="badges">${PLATFORMS.map(p =>
+              `<span class="badge ${it.platforms.includes(p) ? 'on' : ''}" onclick="togglePlatform(${i},'${p}')">${p}</span>`).join('')}
+            </div>
+            <div class="controls">
+              ${s > 0 ? `<button onclick="move(${i},-1)">←</button>` : ''}
+              ${s < STAGES.length - 1 ? `<button onclick="move(${i},1)">→</button>` : ''}
+              ${s < 2 ? `<button onclick="launchClaude(${i})" title="Запустить конвейер в Claude">🚀 Анализ</button>` : ''}
+              <button class="del" onclick="removeItem(${i})">✕</button>
+            </div>`;
+          col.appendChild(el);
+        });
+        board.appendChild(col);
+      });
+    }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    function addItem() {
+      const input = document.getElementById('newTopic');
+      const title = input.value.trim();
+      if (!title) return;
+      items.push({ title, stage: 0, platforms: [] });
+      input.value = '';
+      save(); render();
+    }
+
+    function move(i, dir) { items[i].stage += dir; save(); render(); }
+    function removeItem(i) { items.splice(i, 1); save(); render(); }
+
+    /* ЗАПУСК КОНВЕЙЕРА: открывает Claude Code с готовым заданием по теме */
+    function launchClaude(i) {
+      const prompt =
+        'Прогони тему «' + items[i].title + '» через конвейер контент-фабрики INVEST MIND. ' +
+        'Действуй по инструкции из CLAUDE.md в репозитории: глубокое исследование с проверкой ' +
+        'фактов по первоисточникам, затем отчёт reports/<slug>.html с графиками и пакет постов ' +
+        'posts/<slug>/ для Telegram, LinkedIn, Instagram и YouTube. ' +
+        'Готовые файлы пришли мне в чат и запушь в ветку.';
+      const url = 'https://claude.ai/code?prompt=' + encodeURIComponent(prompt) +
+        '&repositories=' + encodeURIComponent('babenkoph-sys/my-vibe-site');
+      if (items[i].stage === 0) { items[i].stage = 1; save(); render(); }
+      window.open(url, '_blank');
+    }
+
+    function togglePlatform(i, p) {
+      const set = items[i].platforms;
+      const idx = set.indexOf(p);
+      idx >= 0 ? set.splice(idx, 1) : set.push(p);
+      save(); render();
+    }
+
+    /* МЕТРИКИ */
+    let history = JSON.parse(localStorage.getItem(LS_METRICS) || '[]');
+    let chart;
+
+    function saveMetrics() {
+      const entry = {
+        date: new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
+        tg: +document.getElementById('m_tg').value || 0,
+        li: +document.getElementById('m_li').value || 0,
+        ig: +document.getElementById('m_ig').value || 0,
+        yt: +document.getElementById('m_yt').value || 0,
+      };
+      const last = history[history.length - 1];
+      if (last && last.date === entry.date) history[history.length - 1] = entry;
+      else history.push(entry);
+      localStorage.setItem(LS_METRICS, JSON.stringify(history));
+      drawChart();
+    }
+
+    function drawChart() {
+      document.getElementById('chartEmpty').style.display = history.length ? 'none' : 'block';
+      if (!history.length) return;
+      const cfgLine = (label, key, color) => ({
+        label, data: history.map(h => h[key]),
+        borderColor: color, backgroundColor: color, tension: 0.35, pointRadius: 4,
+      });
+      const data = {
+        labels: history.map(h => h.date),
+        datasets: [
+          cfgLine('Telegram', 'tg', '#6366f1'),
+          cfgLine('LinkedIn', 'li', '#8b5cf6'),
+          cfgLine('Instagram', 'ig', '#ec4899'),
+          cfgLine('YouTube', 'yt', '#f59e0b'),
+        ],
+      };
+      const opts = {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#e5e7eb' } } },
+        scales: {
+          x: { ticks: { color: 'rgba(229,231,235,0.6)' }, grid: { color: 'rgba(229,231,235,0.07)' } },
+          y: { ticks: { color: 'rgba(229,231,235,0.6)' }, grid: { color: 'rgba(229,231,235,0.07)' } },
+        },
+      };
+      if (chart) { chart.data = data; chart.update(); }
+      else chart = new Chart(document.getElementById('chart'), { type: 'line', data, options: opts });
+    }
+
+    /* ЭКСПОРТ / ИМПОРТ — перенос данных между устройствами */
+    function exportData() {
+      const blob = new Blob(
+        [JSON.stringify({ items, history }, null, 2)],
+        { type: 'application/json' }
+      );
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'invest-mind-data.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    function importData(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (!Array.isArray(data.items) || !Array.isArray(data.history)) throw new Error();
+          items = data.items;
+          history = data.history;
+          save();
+          localStorage.setItem(LS_METRICS, JSON.stringify(history));
+          render();
+          drawChart();
+          alert('Данные импортированы: тем — ' + items.length + ', замеров — ' + history.length);
+        } catch {
+          alert('Не удалось прочитать файл: это не файл экспорта дашборда.');
+        }
+        input.value = '';
+      };
+      reader.readAsText(file);
+    }
+
+    render();
+    drawChart();
+    if (history.length) {
+      const last = history[history.length - 1];
+      document.getElementById('m_tg').value = last.tg || '';
+      document.getElementById('m_li').value = last.li || '';
+      document.getElementById('m_ig').value = last.ig || '';
+      document.getElementById('m_yt').value = last.yt || '';
+    }
+  </script>
+</body>
+</html>
