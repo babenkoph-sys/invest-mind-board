@@ -301,10 +301,13 @@
     <div class="viewer-box">
       <div class="viewer-head">
         <span id="viewerTitle"></span>
-        <button class="btn small" onclick="copyViewer()">Скопировать текст</button>
+        <button class="btn small" id="viewerCopy" onclick="copyViewer()">Скопировать текст</button>
+        <a class="btn small" id="viewerDownload" style="display:none" download>⬇ Скачать</a>
         <button class="btn small ghost" onclick="closeViewer()">Закрыть</button>
       </div>
       <pre id="viewerText"></pre>
+      <video id="viewerVideo" controls playsinline
+        style="display:none; width:100%; max-height:70vh; background:#000; border-radius:0 0 16px 16px;"></video>
     </div>
   </div>
 
@@ -496,6 +499,19 @@
 
     function b64encode(str) { return btoa(unescape(encodeURIComponent(str))); }
     function b64decode(b) { return decodeURIComponent(escape(atob(String(b).replace(/\n/g, '')))); }
+    // бинарное декодирование base64 (для видео и др. файлов)
+    function b64ToBytes(b) {
+      const bin = atob(String(b).replace(/\n/g, ''));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
+    // Git Blobs API — читает файлы до 100 МБ (Contents API ограничен 1 МБ)
+    async function ghBlob(sha) {
+      const res = await fetch('https://api.github.com/repos/' + REPO + '/git/blobs/' + sha, { headers: ghHeaders() });
+      if (!res.ok) throw new Error('blob ' + res.status);
+      return res.json();
+    }
 
     async function setupSync() {
       if (localStorage.getItem(LS_TOKEN)) {
@@ -595,6 +611,14 @@
         box.innerHTML = '<div class="empty">Пока нет готовых материалов — запустите конвейер кнопкой 🚀.</div>';
         return;
       }
+      // какие темы имеют готовое видео (video/renders/<slug>.mp4)
+      const videoSlugs = new Set();
+      try {
+        const vids = await ghGet('video/renders');
+        if (Array.isArray(vids)) vids.forEach(f => {
+          if (f.name.endsWith('.mp4')) videoSlugs.add(f.name.replace(/\.mp4$/, ''));
+        });
+      } catch {}
       box.innerHTML = '';
       dirs.filter(x => x.type === 'dir').forEach(d => {
         const el = document.createElement('div');
@@ -611,8 +635,24 @@
           b.onclick = () => openPost(d.name, file, label);
           c.appendChild(b);
         });
+        if (videoSlugs.has(d.name)) {
+          const v = document.createElement('button');
+          v.textContent = '▶ Видео';
+          v.onclick = () => openVideo(d.name);
+          c.appendChild(v);
+        }
         box.appendChild(el);
       });
+    }
+
+    // показать модалку в текстовом режиме (скрыть видео)
+    function viewerTextMode() {
+      const v = document.getElementById('viewerVideo');
+      v.pause(); v.removeAttribute('src'); v.load(); v.style.display = 'none';
+      if (videoUrl) { URL.revokeObjectURL(videoUrl); videoUrl = null; }
+      document.getElementById('viewerDownload').style.display = 'none';
+      document.getElementById('viewerText').style.display = 'block';
+      document.getElementById('viewerCopy').style.display = 'inline-block';
     }
 
     async function openPost(slug, file, label) {
@@ -621,10 +661,36 @@
         const f = await ghGet('posts/' + slug + '/' + file);
         syncStatus('✓ синхронизировано');
         if (!f) { alert('Файл для этой платформы не найден.'); return; }
+        viewerTextMode();
         document.getElementById('viewerTitle').textContent = slug + ' — ' + label;
         document.getElementById('viewerText').textContent = b64decode(f.content);
         document.getElementById('viewer').style.display = 'flex';
       } catch { syncStatus('⚠ нет связи'); }
+    }
+
+    let videoUrl = null;
+    async function openVideo(slug) {
+      syncStatus('загрузка видео…');
+      try {
+        const meta = await ghGet('video/renders/' + slug + '.mp4');
+        if (!meta) { alert('Видео для этой темы не найдено.'); syncStatus('✓ синхронизировано'); return; }
+        const blobJson = await ghBlob(meta.sha);
+        const blob = new Blob([b64ToBytes(blobJson.content)], { type: 'video/mp4' });
+        if (videoUrl) URL.revokeObjectURL(videoUrl);
+        videoUrl = URL.createObjectURL(blob);
+        document.getElementById('viewerTitle').textContent = slug + ' — видео';
+        document.getElementById('viewerText').style.display = 'none';
+        document.getElementById('viewerCopy').style.display = 'none';
+        const v = document.getElementById('viewerVideo');
+        v.src = videoUrl; v.style.display = 'block';
+        const dl = document.getElementById('viewerDownload');
+        dl.href = videoUrl; dl.download = slug + '.mp4'; dl.style.display = 'inline-block';
+        document.getElementById('viewer').style.display = 'flex';
+        syncStatus('✓ синхронизировано');
+      } catch (e) {
+        syncStatus('⚠ нет связи');
+        alert('Не удалось загрузить видео.');
+      }
     }
 
     async function openReport(slug) {
@@ -646,7 +712,12 @@
       );
     }
 
-    function closeViewer() { document.getElementById('viewer').style.display = 'none'; }
+    function closeViewer() {
+      const v = document.getElementById('viewerVideo');
+      v.pause(); v.removeAttribute('src'); v.load();
+      if (videoUrl) { URL.revokeObjectURL(videoUrl); videoUrl = null; }
+      document.getElementById('viewer').style.display = 'none';
+    }
 
     /* СТАРТ */
     render();
