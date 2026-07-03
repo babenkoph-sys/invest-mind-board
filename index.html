@@ -611,13 +611,18 @@
         box.innerHTML = '<div class="empty">Пока нет готовых материалов — запустите конвейер кнопкой 🚀.</div>';
         return;
       }
-      // какие темы имеют готовое видео (video/renders/<slug>.mp4)
+      // видео тем (video/renders/<slug>.mp4) и шортсы (video/renders/shorts/<slug>-NN.mp4)
       const videoSlugs = new Set();
+      let shorts = [];
       try {
         const vids = await ghGet('video/renders');
         if (Array.isArray(vids)) vids.forEach(f => {
           if (f.name.endsWith('.mp4')) videoSlugs.add(f.name.replace(/\.mp4$/, ''));
         });
+      } catch {}
+      try {
+        const sh = await ghGet('video/renders/shorts');
+        if (Array.isArray(sh)) shorts = sh.filter(f => f.name.endsWith('.mp4'));
       } catch {}
       box.innerHTML = '';
       dirs.filter(x => x.type === 'dir').forEach(d => {
@@ -638,9 +643,16 @@
         if (videoSlugs.has(d.name)) {
           const v = document.createElement('button');
           v.textContent = '▶ Видео';
-          v.onclick = () => openVideo(d.name);
+          v.onclick = () => openVideo('video/renders/' + d.name + '.mp4', d.name + ' — видео');
           c.appendChild(v);
         }
+        shorts.filter(f => f.name.startsWith(d.name + '-')).forEach(f => {
+          const num = f.name.slice(d.name.length + 1).replace(/\.mp4$/, '');
+          const s = document.createElement('button');
+          s.textContent = '▶ Шортс ' + num;
+          s.onclick = () => openVideo('video/renders/shorts/' + f.name, d.name + ' — шортс ' + num);
+          c.appendChild(s);
+        });
         box.appendChild(el);
       });
     }
@@ -669,22 +681,22 @@
     }
 
     let videoUrl = null;
-    async function openVideo(slug) {
+    async function openVideo(path, title) {
       syncStatus('загрузка видео…');
       try {
-        const meta = await ghGet('video/renders/' + slug + '.mp4');
-        if (!meta) { alert('Видео для этой темы не найдено.'); syncStatus('✓ синхронизировано'); return; }
+        const meta = await ghGet(path);
+        if (!meta) { alert('Видео не найдено.'); syncStatus('✓ синхронизировано'); return; }
         const blobJson = await ghBlob(meta.sha);
         const blob = new Blob([b64ToBytes(blobJson.content)], { type: 'video/mp4' });
         if (videoUrl) URL.revokeObjectURL(videoUrl);
         videoUrl = URL.createObjectURL(blob);
-        document.getElementById('viewerTitle').textContent = slug + ' — видео';
+        document.getElementById('viewerTitle').textContent = title;
         document.getElementById('viewerText').style.display = 'none';
         document.getElementById('viewerCopy').style.display = 'none';
         const v = document.getElementById('viewerVideo');
         v.src = videoUrl; v.style.display = 'block';
         const dl = document.getElementById('viewerDownload');
-        dl.href = videoUrl; dl.download = slug + '.mp4'; dl.style.display = 'inline-block';
+        dl.href = videoUrl; dl.download = path.split('/').pop(); dl.style.display = 'inline-block';
         document.getElementById('viewer').style.display = 'flex';
         syncStatus('✓ синхронизировано');
       } catch (e) {
