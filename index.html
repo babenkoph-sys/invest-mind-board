@@ -210,6 +210,31 @@
     /* МАТЕРИАЛЫ */
     .materials { display: grid; gap: 12px; }
 
+    /* Радар идей */
+    .radar { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); margin-bottom: 8px; }
+    .rcard {
+      background: var(--card);
+      border: 1px solid rgba(229,231,235,0.07);
+      border-left: 3px solid var(--accent1);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .rcard .rrank { color: var(--accent2); font-weight: 700; font-size: 12px; letter-spacing: .04em; }
+    .rcard .rtitle { font-size: 15px; line-height: 1.4; font-weight: 600; }
+    .rcard .rwhy { font-size: 13px; line-height: 1.5; color: var(--muted, #a9a49a); }
+    .rcard .rnums { font-size: 12.5px; line-height: 1.5; color: var(--text); opacity: .9; }
+    .rcard .rangle { font-size: 12.5px; line-height: 1.5; }
+    .rcard .rangle b { color: var(--accent2); }
+    .rscores { display: flex; gap: 6px; flex-wrap: wrap; }
+    .rscore { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: rgba(191,160,106,0.12); color: var(--accent2); }
+    .rconf { font-size: 11.5px; color: var(--muted, #a9a49a); }
+    .rsrc { display: flex; gap: 10px; flex-wrap: wrap; }
+    .rsrc a { font-size: 11.5px; color: var(--accent2); text-decoration: none; opacity: .85; }
+    .rsrc a:hover { opacity: 1; text-decoration: underline; }
+    .rcard .rfoot { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
+    .rmeta { font-size: 11px; color: var(--muted, #a9a49a); margin: -4px 0 6px; }
+
     /* ПРОСМОТР ТЕКСТА */
     .viewer {
       position: fixed; inset: 0; z-index: 50;
@@ -276,6 +301,9 @@
     </div>
 
     <div class="board" id="board"></div>
+
+    <h2>Радар идей <span class="hint">самые горячие темы ниши по свежему веб-поиску; «＋ в конвейер» — тема падает в колонку идей</span></h2>
+    <div id="radar" class="radar"><div class="empty">Подключите синхронизацию (⚙️ справа вверху), чтобы видеть радар. Запуск: скажите Claude «прогони радар».</div></div>
 
     <h2>Материалы фабрики <span class="hint">готовые отчёты и тексты постов из закрытого репозитория; «копировать» — и сразу в соцсеть</span></h2>
     <div id="materials" class="materials"><div class="empty">Подключите синхронизацию (⚙️ справа вверху), чтобы видеть материалы.</div></div>
@@ -532,6 +560,7 @@
       try {
         await pullData(true);
         await loadMaterials();
+        await loadRadar();
         syncStatus('✓ синхронизировано');
       } catch (e) {
         localStorage.removeItem(LS_TOKEN);
@@ -657,6 +686,66 @@
       });
     }
 
+    /* РАДАР ИДЕЙ: горячие темы из radar/latest.json */
+    async function loadRadar() {
+      if (!localStorage.getItem(LS_TOKEN)) return;
+      const box = document.getElementById('radar');
+      let data = null;
+      try {
+        const f = await ghGet('radar/latest.json');
+        if (f && f.content) data = JSON.parse(b64decode(f.content));
+      } catch {}
+      if (!data || !Array.isArray(data.topics) || !data.topics.length) {
+        box.innerHTML = '<div class="empty">Радар пока пуст — скажите Claude «прогони радар», и здесь появятся горячие темы недели.</div>';
+        return;
+      }
+      const meta = document.createElement('div');
+      meta.className = 'rmeta';
+      meta.textContent = 'Прогон ' + (data.generated || '') + ' · окно: ' + (data.window || '') + ' · охват: ' + (data.scope || '');
+      box.innerHTML = '';
+      box.appendChild(meta);
+      const grid = document.createElement('div');
+      grid.className = 'radar';
+      data.topics.forEach(t => {
+        const el = document.createElement('div');
+        el.className = 'rcard';
+        let html = '';
+        html += '<div class="rrank">#' + (t.rank || '') + ' · score ' + (t.score != null ? t.score : '') + '</div>';
+        html += '<div class="rtitle">' + esc(t.title || '') + '</div>';
+        html += '<div class="rscores">'
+          + '<span class="rscore">🔥 heat ' + (t.heat ?? '–') + '</span>'
+          + '<span class="rscore">✦ novelty ' + (t.novelty ?? '–') + '</span>'
+          + '<span class="rscore">🎯 fit ' + (t.fit ?? '–') + '</span></div>';
+        if (t.why_now) html += '<div class="rwhy">' + esc(t.why_now) + '</div>';
+        if (t.key_numbers) html += '<div class="rnums"><b>Цифры:</b> ' + esc(t.key_numbers) + '</div>';
+        if (t.angle) html += '<div class="rangle"><b>Угол:</b> ' + esc(t.angle) + '</div>';
+        if (t.confidence) html += '<div class="rconf">' + esc(t.confidence) + '</div>';
+        if (Array.isArray(t.sources) && t.sources.length) {
+          html += '<div class="rsrc">' + t.sources.map((s, i) =>
+            '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">источник ' + (i + 1) + (s.date ? ' · ' + esc(s.date) : '') + '</a>'
+          ).join('') + '</div>';
+        }
+        el.innerHTML = html;
+        const foot = document.createElement('div');
+        foot.className = 'rfoot';
+        const add = document.createElement('button');
+        add.textContent = '＋ в конвейер';
+        add.onclick = () => addRadarTopic(t.title);
+        foot.appendChild(add);
+        el.appendChild(foot);
+        grid.appendChild(el);
+      });
+      box.appendChild(grid);
+    }
+
+    function addRadarTopic(title) {
+      if (!title) return;
+      if (items.some(x => x.title === title)) { alert('Эта тема уже в конвейере.'); return; }
+      items.push({ title, stage: 0, platforms: [] });
+      save(); render();
+      alert('Тема добавлена в колонку «Идеи». Нажмите 🚀, чтобы запустить конвейер.');
+    }
+
     // показать модалку в текстовом режиме (скрыть видео)
     function viewerTextMode() {
       const v = document.getElementById('viewerVideo');
@@ -738,6 +827,7 @@
       syncStatus('…');
       pullData().catch(() => syncStatus('⚠ нет связи'));
       loadMaterials().catch(() => {});
+      loadRadar().catch(() => {});
       setInterval(() => pullData().catch(() => {}), 60000);
     }
     if (history.length) {
