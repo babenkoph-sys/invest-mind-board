@@ -663,6 +663,10 @@
         rep.textContent = '📊 Отчёт';
         rep.onclick = () => openReport(d.name);
         c.appendChild(rep);
+        const dl = document.createElement('button');
+        dl.textContent = '⬇ Скачать';
+        dl.onclick = () => downloadReport(d.name);
+        c.appendChild(dl);
         PLATFORM_FILES.forEach(([label, file]) => {
           const b = document.createElement('button');
           b.textContent = label;
@@ -802,6 +806,22 @@
         if (!f) { alert('Отчёт не найден.'); return; }
         const blob = new Blob([b64decode(f.content)], { type: 'text/html' });
         window.open(URL.createObjectURL(blob), '_blank');
+      } catch { syncStatus('⚠ нет связи'); }
+    }
+
+    // сохранить отчёт файлом (без Ctrl+S)
+    async function downloadReport(slug) {
+      syncStatus('…');
+      try {
+        const f = await ghGet('reports/' + slug + '.html');
+        syncStatus('✓ синхронизировано');
+        if (!f) { alert('Отчёт не найден.'); return; }
+        const blob = new Blob([b64decode(f.content)], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = slug + '.html';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
       } catch { syncStatus('⚠ нет связи'); }
     }
 
