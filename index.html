@@ -302,8 +302,11 @@
 
     <div class="board" id="board"></div>
 
-    <h2>Радар идей <span class="hint">самые горячие темы ниши по свежему веб-поиску; «＋ в конвейер» — тема падает в колонку идей</span></h2>
-    <div id="radar" class="radar"><div class="empty">Подключите синхронизацию (⚙️ справа вверху), чтобы видеть радар. Запуск: скажите Claude «прогони радар».</div></div>
+    <h2>Радар идей
+      <button class="btn small" onclick="launchRadar()" title="Запустить свежий поиск горячих тем в Claude" style="margin-left:10px;vertical-align:middle">🔄 Запустить радар</button>
+      <span class="hint">кнопка откроет Claude с готовым заданием; результат появится здесь после публикации. «＋ в конвейер» — тема падает в колонку идей</span>
+    </h2>
+    <div id="radar" class="radar"><div class="empty">Подключите синхронизацию (⚙️ справа вверху), чтобы видеть радар. Запуск — кнопка «🔄 Запустить радар» выше (или скажите Claude «прогони радар»).</div></div>
 
     <h2>Материалы фабрики <span class="hint">готовые отчёты и тексты постов из закрытого репозитория; «копировать» — и сразу в соцсеть</span></h2>
     <div id="materials" class="materials"><div class="empty">Подключите синхронизацию (⚙️ справа вверху), чтобы видеть материалы.</div></div>
@@ -407,6 +410,18 @@
       const url = 'https://claude.ai/code?prompt=' + encodeURIComponent(prompt) +
         '&repositories=' + encodeURIComponent('babenkoph-sys/my-vibe-site');
       if (items[i].stage === 0) { items[i].stage = 1; save(); render(); }
+      window.open(url, '_blank');
+    }
+
+    function launchRadar() {
+      const prompt =
+        'Прогони тренд-радар INVEST MIND по инструкции из radar/README.md в репозитории: ' +
+        '5 параллельных агентов по углам (IPO, private equity, венчур, экономика ИИ, смежное макро/M&A), ' +
+        'только свежий веб-поиск за последние ~2–3 недели, перекрёстная сверка цифр и пометка достоверности. ' +
+        'Ранжируй темы по heat/novelty/fit, обнови radar/latest.json и датированную копию radar/<дата>.json, ' +
+        'пришли краткий дайджест в чат. После моего подтверждения опубликуй радар в main, чтобы он появился на дашборде.';
+      const url = 'https://claude.ai/code?prompt=' + encodeURIComponent(prompt) +
+        '&repositories=' + encodeURIComponent('babenkoph-sys/my-vibe-site');
       window.open(url, '_blank');
     }
 
@@ -700,7 +715,7 @@
         if (f && f.content) data = JSON.parse(b64decode(f.content));
       } catch {}
       if (!data || !Array.isArray(data.topics) || !data.topics.length) {
-        box.innerHTML = '<div class="empty">Радар пока пуст — скажите Claude «прогони радар», и здесь появятся горячие темы недели.</div>';
+        box.innerHTML = '<div class="empty">Радар пока пуст — нажмите «🔄 Запустить радар» выше, и после публикации здесь появятся горячие темы недели.</div>';
         return;
       }
       const meta = document.createElement('div');
