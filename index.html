@@ -694,6 +694,13 @@
           v.onclick = () => openVideo('video/renders/' + d.name + '.mp4', d.name + ' — видео');
           c.appendChild(v);
         }
+        // англоязычная версия лонга: video/renders/<slug>-en.mp4
+        if (videoSlugs.has(d.name + '-en')) {
+          const ve = document.createElement('button');
+          ve.textContent = '▶ Видео EN';
+          ve.onclick = () => openVideo('video/renders/' + d.name + '-en.mp4', d.name + ' — видео (EN)');
+          c.appendChild(ve);
+        }
         shorts.filter(f => f.name.startsWith(d.name + '-')).forEach(f => {
           const num = f.name.slice(d.name.length + 1).replace(/\.mp4$/, '');
           const s = document.createElement('button');
